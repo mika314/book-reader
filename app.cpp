@@ -3,6 +3,7 @@
 #include "imgui-impl-sdl.h"
 #include "json-ser.hpp"
 #include "ui.hpp"
+#include "utf8-parser.hpp"
 #include <SDL_opengl.h>
 #include <algorithm>
 #include <filesystem>
@@ -10,6 +11,8 @@
 #include <imgui/imgui.h>
 #include <log/log.hpp>
 #include <sstream>
+
+static auto updateUtf8Punctuation(std::string) -> std::string;
 
 App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
   : window(aWindow),
@@ -280,17 +283,10 @@ auto App::tick() -> void
       // read until \n
       for (; readingPos < static_cast<int>(bookContent.size()) && bookContent[readingPos] != '\n';
            ++readingPos)
-      {
-        const auto ch = bookContent[readingPos];
-        if (ch < 0)
-          paragraph += ' ';
-        else if (ch == '*')
-          paragraph += ' ';
-        else
-          paragraph += ch;
-      }
-      ttsPyProc << tokenId++ << ",p364," << paragraph << std::endl;
+        paragraph += bookContent[readingPos];
+
       cooldown = now + 200 + paragraph.size() * 4;
+      ttsPyProc << tokenId++ << ",p364," << updateUtf8Punctuation(std::move(paragraph)) << std::endl;
     }
 
     ImGui::TextWrapped("%s", bookContent.c_str());
@@ -484,4 +480,28 @@ auto App::processTts() -> void
     break;
     }
   }
+}
+
+auto updateUtf8Punctuation(std::string str) -> std::string
+{
+  auto parser = Utf8Parser(std::move(str));
+  auto r = std::string{};
+  for (auto ch = parser.getCh(); !ch.empty(); ch = parser.getCh())
+  {
+    if (ch == "“" || ch == "”")
+      r += "\"";
+    else if (ch == "’")
+      r += "\'";
+    else if (ch == "—")
+      r += "--";
+    else if (ch == "…")
+      r += "...";
+    else if (ch.empty())
+      continue;
+    else if (ch[0] == '\0')
+      continue;
+    else if (ch.size() == 1)
+      r += ch;
+  }
+  return r;
 }
