@@ -42,8 +42,8 @@ int main(int argc, const char **argv)
   SDL_WindowFlags window_flags =
     (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED);
 
-  auto window =
-    sdl::Window{"Book Reader", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1280, 720, window_flags};
+  auto window = sdl::Window{
+    "Book Reader", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1280, 720, window_flags};
 
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -71,22 +71,24 @@ int main(int argc, const char **argv)
     style.FrameRounding = 5.f;
     style.Colors[ImGuiCol_Text] = ImVec4{0xff / 255.f, 0xff / 255.f, 0xff / 255.f, 1.f};
     style.Colors[ImGuiCol_TextDisabled] = ImVec4{0xc0 / 255.f, 0xc0 / 255.f, 0xc0 / 255.f, 1.f};
-    style.Colors[ImGuiCol_WindowBg] = ImVec4{0x7f / 255.f, 0x8d / 255.f, 0xba / 255.f, .8f};
-    style.Colors[ImGuiCol_ChildBg] = ImVec4{0x7f / 255.f, 0x8d / 255.f, 0xba / 255.f, 1.f};
-    style.Colors[ImGuiCol_PopupBg] = ImVec4{0x7f / 255.f, 0x8d / 255.f, 0xba / 255.f, 1.f};
-    style.Colors[ImGuiCol_Border] = ImVec4{0x6f / 255.f, 0x7d / 255.f, 0xaa / 255.f, 1.f};
-    style.Colors[ImGuiCol_BorderShadow] = ImVec4{0x56 / 255.f, 0x58 / 255.f, 0x8d / 255.f, 1.f};
-    style.Colors[ImGuiCol_FrameBg] = ImVec4{0x6f / 255.f, 0x7d / 255.f, 0xaa / 255.f, 1.f};
+    style.Colors[ImGuiCol_WindowBg] = ImVec4{0x8a / 255.f, 0x83 / 255.f, 0x73 / 255.f, .8f};
+
+    style.Colors[ImGuiCol_ChildBg] = ImVec4{0x70 / 255.f, 0x6e / 255.f, 0x67 / 255.f, 1.f};
+    style.Colors[ImGuiCol_PopupBg] = ImVec4{0x70 / 255.f, 0x6e / 255.f, 0x67 / 255.f, 1.f};
+
+    style.Colors[ImGuiCol_Border] = ImVec4{0xaa / 255.f, 0x7d / 255.f, 0x6f / 255.f, 1.f};
+    style.Colors[ImGuiCol_BorderShadow] = ImVec4{0x8d / 255.f, 0x58 / 255.f, 0x56 / 255.f, 1.f};
+    style.Colors[ImGuiCol_FrameBg] = ImVec4{0xaa / 255.f, 0x7d / 255.f, 0x6f / 255.f, 1.f};
     // ImGuiCol_FrameBgHovered,
     // ImGuiCol_FrameBgActive,
-    style.Colors[ImGuiCol_TitleBg] = ImVec4{0x7f / 255.f, 0x8d / 255.f, 0xba / 255.f, 1.f};
+    style.Colors[ImGuiCol_TitleBg] = ImVec4{0xba / 255.f, 0x8d / 255.f, 0x7f / 255.f, 1.f};
     style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4{0xd3 / 255.f, 0xac / 255.f, 0xcb / 255.f, .1f};
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4{0x8f / 255.f, 0x9d / 255.f, 0xca / 255.f, 1.f};
-    style.Colors[ImGuiCol_MenuBarBg] = ImVec4{0x7f / 255.f, 0x8d / 255.f, 0xba / 255.f, 1.f};
-    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4{0x7f / 255.f, 0x8d / 255.f, 0xba / 255.f, 1.f};
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4{0xca / 255.f, 0x9d / 255.f, 0x8f / 255.f, 1.f};
+    style.Colors[ImGuiCol_MenuBarBg] = ImVec4{0xba / 255.f, 0x8d / 255.f, 0x7f / 255.f, 1.f};
+    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4{0xba / 255.f, 0x8d / 255.f, 0x7f / 255.f, 1.f};
     style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4{0xbb / 255.f, 0xc4 / 255.f, 0xdc / 255.f, 1.f};
     style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4{0xcb / 255.f, 0xd4 / 255.f, 0xec / 255.f, 1.f};
-    style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4{0xdb / 255.f, 0xe4 / 255.f, 0xfc / 255.f, 1.f};
+    style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4{0xfc / 255.f, 0xe4 / 255.f, 0xdb / 255.f, 1.f};
     style.Colors[ImGuiCol_CheckMark] = ImVec4{0xbb / 255.f, 0xc4 / 255.f, 0xdc / 255.f, 1.f};
     style.Colors[ImGuiCol_SliderGrab] = ImVec4{0xbb / 255.f, 0xc4 / 255.f, 0xdc / 255.f, 1.f};
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4{0xcb / 255.f, 0xd4 / 255.f, 0xec / 255.f, 1.f};

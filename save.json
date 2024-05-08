@@ -36,10 +36,16 @@
     "A Choice of Hatreds - C. L. Werner": {
       "readingPos": 0
     },
+    "A Clash of Kings - Book 2": {
+      "readingPos": 0
+    },
     "A Clash of Kings - George R. R. Martin": {
       "readingPos": 0
     },
     "A Clash of Kings - George RR Martin": {
+      "readingPos": 0
+    },
+    "A Dance With Dragons - Book 5": {
       "readingPos": 0
     },
     "A Dance With Dragons - George R R Martin": {
@@ -49,6 +55,9 @@
       "readingPos": 0
     },
     "A Feast For Crows - George RR Martin": {
+      "readingPos": 0
+    },
+    "A Feast for Crows - Book 4": {
       "readingPos": 0
     },
     "A Feast for Crows - George R. R. Martin": {
@@ -64,7 +73,7 @@
       "readingPos": 246
     },
     "A Game of Thrones_ Illustrated Edition - George R.R. Martin": {
-      "readingPos": 0
+      "readingPos": 11792
     },
     "A Mug of Recaff - Sandy Mitchell": {
       "readingPos": 0
@@ -475,7 +484,7 @@
       "readingPos": 0
     },
     "Dune Chronicles 1 - Hunters of Dune": {
-      "readingPos": 0
+      "readingPos": 16587
     },
     "Dune Chronicles 2 - The Sandworms of Dune": {
       "readingPos": 0
@@ -1081,7 +1090,7 @@
       "readingPos": 0
     },
     "Robert A. Heinlein - Starship Troopers ePub": {
-      "readingPos": 0
+      "readingPos": 15985
     },
     "Rocket Ship Galileo - Heinlein, Robert A": {
       "readingPos": 0
@@ -1498,7 +1507,7 @@
       "readingPos": 0
     },
     "Stephen King - Dark Tower 01 - The Gunslinger": {
-      "readingPos": 0
+      "readingPos": 3559
     },
     "Stephen King - Dark Tower 02 - The Drawing Of The Three": {
       "readingPos": 0
@@ -1648,7 +1657,7 @@
       "readingPos": 8725
     },
     "The Ego Machine by Henry Kuttner": {
-      "readingPos": 5183
+      "readingPos": 13128
     },
     "The Emperor's Chosen - Mike Lee": {
       "readingPos": 0
@@ -1660,7 +1669,7 @@
       "readingPos": 0
     },
     "The Found and the Lost by Ursula K. Le Guin": {
-      "readingPos": 0
+      "readingPos": 5921
     },
     "The Fourth Omnibus - Nathan Long": {
       "readingPos": 0
@@ -1936,5 +1945,5 @@
       "readingPos": 0
     }
   },
-  "selectedBook": "Expanded Universe, Vol. 1 by Robert A. Heinlein"
+  "selectedBook": "Dune Chronicles 1 - Hunters of Dune"
 }

@@ -48,6 +48,7 @@ private:
   Uint32 cooldown = 0;
   Save save;
   bool needToUpdateScrollBar = false;
+  float desieredScroll = -1.f;
 
   auto loadBook(const std::filesystem::path &) -> void;
   auto processTts() -> void;

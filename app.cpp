@@ -17,7 +17,7 @@ App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
     ttsPyProc("/usr/bin/python ./tts_v2.py tts_models/en/vctk/vits"),
     want([]() {
       SDL_AudioSpec ret;
-      ret.freq = 24000;
+      ret.freq = 22050;
       ret.format = AUDIO_S16;
       ret.channels = 1;
       ret.samples = 4096;
@@ -282,22 +282,39 @@ auto App::tick() -> void
            ++readingPos)
       {
         const auto ch = bookContent[readingPos];
-        if (ch > 0)
+        if (ch < 0)
+          paragraph += ' ';
+        else if (ch == '*')
+          paragraph += ' ';
+        else
           paragraph += ch;
       }
       ttsPyProc << tokenId++ << ",p364," << paragraph << std::endl;
-      cooldown = now + 200 + paragraph.size() * 2;
+      cooldown = now + 200 + paragraph.size() * 4;
     }
 
     ImGui::TextWrapped("%s", bookContent.c_str());
-    if (updateScrollBar > 0)
+    if (updateScrollBar >= 0)
     {
       const auto heightAtPos =
         ImGui::CalcTextSize(
           bookContent.c_str(), bookContent.c_str() + updateScrollBar, false, windowWidth)
           .y;
-      ImGui::SetScrollY(heightAtPos - availableHeight * .25);
+      desieredScroll = heightAtPos - availableHeight / 7.f;
     }
+
+    if (desieredScroll >= 0)
+    {
+      const auto currentScrollY = ImGui::GetScrollY();
+      if (abs(currentScrollY - desieredScroll) < 10.f)
+      {
+        ImGui::SetScrollY(desieredScroll);
+        desieredScroll = -1.f;
+      }
+      else
+        ImGui::SetScrollY(currentScrollY + (desieredScroll - currentScrollY) * .05f);
+    }
+
     ImGui::EndChild();
   }
 
