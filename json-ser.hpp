@@ -3,6 +3,7 @@
 #pragma once
 #include <iostream>
 #include <json/json.hpp>
+#include <map>
 #include <ser/is_serializable.hpp>
 #include <sstream>
 
@@ -84,8 +85,50 @@ namespace Internal
     st << "}";
   }
 
+  template <typename T>
+  auto jsonSerVal(std::ostream &st, std::map<std::string, T> v, int lvl) -> void
+  {
+    st << "{\n";
+    auto first = true;
+    for (auto &&e : v)
+    {
+      if (first)
+        first = false;
+      else
+        st << ",\n";
+      indent(st, lvl + 1);
+      jsonEsc(st, e.first);
+      st << ": ";
+      jsonSer(st, std::move(e.second), lvl + 1);
+    }
+    st << "\n";
+    indent(st, lvl);
+    st << "}";
+  }
+
   template <typename U, typename T>
   auto jsonSerVal(std::ostream &st, std::unordered_map<U, T> v, int lvl)
+    -> std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>>
+  {
+    st << "{\n";
+    auto first = true;
+    for (auto &&e : v)
+    {
+      if (first)
+        first = false;
+      else
+        st << ",\n";
+      indent(st, lvl + 1);
+      st << "\"" << e.first << "\": ";
+      jsonSer(st, std::move(e.second), lvl + 1);
+    }
+    st << "\n";
+    indent(st, lvl);
+    st << "}";
+  }
+
+  template <typename U, typename T>
+  auto jsonSerVal(std::ostream &st, std::map<U, T> v, int lvl)
     -> std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>>
   {
     st << "{\n";
@@ -172,8 +215,38 @@ namespace Internal
     }
   }
 
+  template <typename T>
+  auto jsonDeserVal(const json::Val &j, std::map<std::string, T> &v) -> void
+  {
+    if (!j.isObj())
+      return;
+    auto fields = j.getFields();
+    for (const auto &f : fields)
+    {
+      auto tmp = v.emplace(f, T{});
+      jsonDeser(j(f), tmp.first->second);
+    }
+  }
+
   template <typename U, typename T>
   auto jsonDeserVal(const json::Val &j, std::unordered_map<U, T> &v)
+    -> std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>>
+  {
+    if (!j.isObj())
+      return;
+    auto fields = j.getFields();
+    for (const auto &f : fields)
+    {
+      auto key = U{};
+      auto st = std::istringstream{std::string{f}};
+      st >> key;
+      auto tmp = v.emplace(key, T{});
+      jsonDeser(j(f), tmp.first->second);
+    }
+  }
+
+  template <typename U, typename T>
+  auto jsonDeserVal(const json::Val &j, std::map<U, T> &v)
     -> std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>>
   {
     if (!j.isObj())

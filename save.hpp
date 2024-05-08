@@ -1,7 +1,7 @@
 #pragma once
+#include <map>
 #include <ser/macro.hpp>
 #include <string>
-#include <unordered_map>
 
 struct Book
 {
@@ -12,6 +12,6 @@ struct Book
 struct Save
 {
   SER_PROPS(books, selectedBook);
-  std::unordered_map<std::string, Book> books;
+  std::map<std::string, Book> books;
   std::string selectedBook;
 };

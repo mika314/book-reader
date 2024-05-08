@@ -248,7 +248,7 @@ auto App::tick() -> void
 
     const auto isTalking = [&]() {
       audio.lock();
-      auto res = wav.size() > 20000;
+      auto res = wav.size() > 10000;
       audio.unlock();
       return res;
     }();
@@ -266,7 +266,6 @@ auto App::tick() -> void
 
     if (isReading && !isTalking && cooldown < now)
     {
-      cooldown = now + 5000;
       static int tokenId = 0;
 
       updateScrollBar = readingPos;
@@ -287,6 +286,7 @@ auto App::tick() -> void
           paragraph += ch;
       }
       ttsPyProc << tokenId++ << ",p364," << paragraph << std::endl;
+      cooldown = now + 200 + paragraph.size() * 2;
     }
 
     ImGui::TextWrapped("%s", bookContent.c_str());
@@ -296,7 +296,7 @@ auto App::tick() -> void
         ImGui::CalcTextSize(
           bookContent.c_str(), bookContent.c_str() + updateScrollBar, false, windowWidth)
           .y;
-      ImGui::SetScrollY(heightAtPos);
+      ImGui::SetScrollY(heightAtPos - availableHeight * .25);
     }
     ImGui::EndChild();
   }
