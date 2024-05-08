@@ -1,14 +1,38 @@
 #include "app.hpp"
 #include "imgui-impl-opengl3.h"
 #include "imgui-impl-sdl.h"
+#include "json-ser.hpp"
 #include "ui.hpp"
 #include <SDL_opengl.h>
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <imgui/imgui.h>
 #include <log/log.hpp>
+#include <sstream>
 
-App::App(sdl::Window &aWindow, int argc, const char *argv[])
-  : window(aWindow), gl_context(SDL_GL_CreateContext(window.get().get()))
+App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
+  : window(aWindow),
+    gl_context(SDL_GL_CreateContext(window.get().get())),
+    ttsPyProc("/usr/bin/python ./tts_v2.py tts_models/en/vctk/vits"),
+    want([]() {
+      SDL_AudioSpec ret;
+      ret.freq = 24000;
+      ret.format = AUDIO_S16;
+      ret.channels = 1;
+      ret.samples = 4096;
+      return ret;
+    }()),
+    audio(nullptr, false, &want, &have, 0, [this](Uint8 *stream, int len) {
+      const auto sz = std::min(wav.size() * sizeof(int16_t), static_cast<size_t>(len));
+      SDL_memcpy(stream, wav.data(), sz);
+      wav.erase(wav.begin(), wav.begin() + sz / sizeof(int16_t));
+      // zero the rest
+      SDL_memset(stream + sz, 0, len - sz);
+      return sz;
+    })
 {
+  audio.pause(false);
   SDL_GL_MakeCurrent(window.get().get(), gl_context);
   SDL_GL_SetSwapInterval(1);
 
@@ -41,7 +65,6 @@ App::App(sdl::Window &aWindow, int argc, const char *argv[])
   ImGui_ImplSDL2_InitForOpenGL(window.get().get(), gl_context);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
-  auto &io = ImGui::GetIO();
   // Load Fonts
   // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts
   // and use ImGui::PushFont()/PopFont() to select them.
@@ -61,9 +84,33 @@ App::App(sdl::Window &aWindow, int argc, const char *argv[])
   // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
   // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
   // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-  io.Fonts->AddFontFromFileTTF("PlayfairDisplay-VariableFont_wght.ttf", 17.5f);
+
+  ImGuiIO &io = ImGui::GetIO();
+  // Optionally add more ranges depending on your needs
+  static const ImWchar ranges[] = {
+    0x0020,
+    0x007f, // Basic Latin (this range covers the standard ASCII characters)
+
+    0x00a0,
+    0x00ff, // Latin-1 Supplement (for Western European languages)
+
+    0x0400,
+    0x052f, // Cyrillic (for Russian and similar languages)
+
+    0x4e00,
+    0x9faf, // CJK Ideograms (for Chinese and Japanese characters)
+
+    0x2010,
+    0x205e, // Punctuation including ‘’ “”
+    0,
+  };
+
+  io.Fonts->AddFontFromFileTTF("Rajdhani-Regular.ttf", 30.f, nullptr, ranges);
+
   // ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL,
   // io.Fonts->GetGlyphRangesJapanese()); IM_ASSERT(font != NULL);
+
+  scanBooks();
 }
 
 auto App::tick() -> void
@@ -96,8 +143,162 @@ auto App::tick() -> void
   ImGui_ImplSDL2_NewFrame();
   ImGui::NewFrame();
 
+  if (ImGui::BeginMainMenuBar())
+  {
+    if (ImGui::BeginMenu("File"))
+    {
+      if (ImGui::MenuItem("Save", "Ctrl+S"))
+      {
+        auto f = std::ofstream{"save.json"};
+        jsonSer(f, save);
+      }
+      if (ImGui::MenuItem("Quit", "Ctrl+Q"))
+        done = true;
+      ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
+  }
+
   {
     auto window = Ui::Window("Books");
+    tmpBooks.clear();
+    tmpBooks2.clear();
+    for (const auto &book : books)
+    {
+      std::ostringstream ss;
+      ss << book.stem().stem();
+      tmpBooks2.push_back(ss.str());
+      tmpBooks.push_back(tmpBooks2.back().c_str());
+    }
+
+    float listBoxHeight = ImGui::GetContentRegionAvail().y;
+
+    if (ImGui::BeginListBox("Books List", ImVec2(-1, listBoxHeight)))
+    {
+      for (auto i = 0; i < static_cast<int>(tmpBooks.size()); ++i)
+      {
+        const auto is_selected = (selectedBook == i);
+        if (ImGui::Selectable(tmpBooks[i], is_selected))
+        {
+          selectedBook = i;
+          loadBook(books[i]);
+        }
+
+        // Set the initial focus when opening the listbox
+        if (is_selected)
+          ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndListBox();
+    }
+  }
+
+  if (selectedBook >= 0 && selectedBook < static_cast<int>(books.size()))
+  {
+    auto window = Ui::Window("Book");
+    const auto &book = books[selectedBook];
+    ImGui::Text("%s", book.stem().stem().c_str());
+    if (!isReading)
+    {
+      if (ImGui::Button("Play"))
+      {
+        isReading = true;
+        readingPos = -1;
+      }
+    }
+    else
+    {
+      if (ImGui::Button("Stop"))
+        isReading = false;
+    }
+
+    float availableHeight = ImGui::GetContentRegionAvail().y;
+
+    ImGui::BeginChild("Scrolling",
+                      ImVec2(0, availableHeight), // Use available height instead of fixed height
+                      false,
+                      0);
+
+    const auto windowWidth = ImGui::GetWindowWidth();
+    if (totalBookHeight < 0)
+    {
+      totalBookHeight = ImGui::CalcTextSize(bookContent.c_str(), nullptr, false, windowWidth).y;
+      LOG("totalBookHeight:", totalBookHeight);
+    }
+
+    if (readingPos < 0 && isReading)
+    {
+      const auto currentScrollY = ImGui::GetScrollY();
+      auto startPos = 0;
+      auto endPos = bookContent.size();
+      while (endPos - startPos > 1)
+      {
+        const auto nextPos = startPos + (endPos - startPos) / 2;
+        const auto heightAtPos =
+          ImGui::CalcTextSize(bookContent.c_str(), bookContent.c_str() + nextPos, false, windowWidth).y;
+        if (heightAtPos < currentScrollY)
+          startPos = nextPos;
+        else
+          endPos = nextPos;
+      }
+      readingPos = startPos;
+      save.books[save.selectedBook].readingPos = readingPos;
+
+      LOG("readingPos:", readingPos);
+    }
+
+    const auto isTalking = [&]() {
+      audio.lock();
+      auto res = wav.size() > 20000;
+      audio.unlock();
+      return res;
+    }();
+
+    const auto now = SDL_GetTicks();
+
+    auto updateScrollBar = -1;
+
+    if (needToUpdateScrollBar)
+    {
+      needToUpdateScrollBar = false;
+      updateScrollBar = readingPos;
+      LOG("updateScrollBar:", updateScrollBar);
+    }
+
+    if (isReading && !isTalking && cooldown < now)
+    {
+      cooldown = now + 5000;
+      static int tokenId = 0;
+
+      updateScrollBar = readingPos;
+      save.books[save.selectedBook].readingPos = readingPos;
+
+      // skip all white space
+      for (; readingPos < static_cast<int>(bookContent.size()) && isspace(bookContent[readingPos]);
+           ++readingPos)
+      {
+      }
+      auto paragraph = std::string{};
+      // read until \n
+      for (; readingPos < static_cast<int>(bookContent.size()) && bookContent[readingPos] != '\n';
+           ++readingPos)
+      {
+        const auto ch = bookContent[readingPos];
+        if (ch > 0)
+          paragraph += ch;
+      }
+      ttsPyProc << tokenId++ << ",p364," << paragraph << std::endl;
+    }
+
+    ImGui::TextWrapped("%s", bookContent.c_str());
+    if (updateScrollBar > 0)
+    {
+      const auto heightAtPos =
+        ImGui::CalcTextSize(
+          bookContent.c_str(), bookContent.c_str() + updateScrollBar, false, windowWidth)
+          .y;
+      ImGui::SetScrollY(heightAtPos);
+    }
+    ImGui::EndChild();
   }
 
   ImGui::Render();
@@ -122,6 +323,148 @@ auto App::tick() -> void
   }
 
   window.get().glSwap();
+  processTts();
 }
 
-App::~App() {}
+App::~App()
+{
+  auto f = std::ofstream{"save.json"};
+  jsonSer(f, save);
+}
+
+auto App::scanBooks() -> void
+{
+  auto f = std::ifstream{"save.json"};
+  if (f)
+    jsonDeser(f, save);
+
+  books.clear();
+  for (auto &p : std::filesystem::recursive_directory_iterator("/home/mika/Documents/belletristic/en"))
+  {
+    std::ostringstream ss;
+    ss << p.path();
+    auto strPath = ss.str();
+    const auto pos = strPath.find(".epub.txt");
+    if (pos != strPath.size() - strlen(".epub.txt") - 1)
+      continue;
+
+    books.push_back(p.path());
+    save.books[p.path().stem().stem()];
+  }
+
+  std::sort(std::begin(books), std::end(books));
+  LOG("selected book", save.selectedBook);
+  for (auto i = 0U; i < books.size(); ++i)
+  {
+    std::string bookName = books[i].stem().stem();
+    LOG(bookName);
+    if (save.selectedBook == bookName)
+    {
+      LOG("selectedBook:", books[i].stem().stem());
+      selectedBook = i;
+      loadBook(books[i]);
+      break;
+    }
+  }
+}
+
+auto App::loadBook(const std::filesystem::path &v) -> void
+{
+  auto f = std::ifstream{v.string()};
+  if (!f)
+  {
+    LOG("Failed to open file:", v.string());
+    return;
+  }
+  auto ss = std::ostringstream{};
+  ss << f.rdbuf();
+  bookContent = ss.str();
+  totalBookHeight = -1;
+  isReading = false;
+  readingPos = save.books[v.stem().stem()].readingPos;
+  if (readingPos < 0 || readingPos >= static_cast<int>(bookContent.size()))
+    readingPos = 0;
+  save.selectedBook = v.stem().stem();
+  isReading = false;
+  needToUpdateScrollBar = true;
+}
+
+auto App::processTts() -> void
+{
+  ttsPyProc.clear();
+
+  for (;;)
+  {
+    switch (ttsPack.state)
+    {
+    case TtsPack::State::magicword: {
+      const auto n = ttsPyProc.readsome(reinterpret_cast<char *>(&ttsPack.magicword) + ttsPack.pos,
+                                        sizeof(ttsPack.magicword) - ttsPack.pos);
+      ttsPack.pos += n;
+      if (ttsPack.pos == sizeof(ttsPack.magicword))
+      {
+        if (std::string_view{ttsPack.magicword.data(), ttsPack.magicword.size()} !=
+            std::string_view{"TTS\0", 4})
+        {
+          LOG("Invalid magic word");
+          for (auto i = 0U; i < ttsPack.magicword.size(); ++i)
+            LOG(static_cast<unsigned>(ttsPack.magicword[i]));
+          return;
+        }
+        ttsPack.pos = 0;
+        ttsPack.state = TtsPack::State::size;
+      }
+      if (n == 0)
+        return;
+    }
+    break;
+    case TtsPack::State::size: {
+      const auto n = ttsPyProc.readsome(reinterpret_cast<char *>(&ttsPack.size) + ttsPack.pos,
+                                        sizeof(ttsPack.size) - ttsPack.pos);
+      ttsPack.pos += n;
+      if (ttsPack.pos == sizeof(ttsPack.size))
+      {
+        ttsPack.wav.resize(ttsPack.size / sizeof(ttsPack.wav[0]));
+        ttsPack.pos = 0;
+        ttsPack.state = TtsPack::State::tokenId;
+      }
+      if (n == 0)
+        return;
+    }
+    break;
+    case TtsPack::State::tokenId: {
+      const auto n = ttsPyProc.readsome(reinterpret_cast<char *>(&ttsPack.tokenId) + ttsPack.pos,
+                                        sizeof(ttsPack.tokenId) - ttsPack.pos);
+      ttsPack.pos += n;
+      if (ttsPack.pos == sizeof(ttsPack.tokenId))
+      {
+        ttsPack.pos = 0;
+        ttsPack.state = TtsPack::State::wav;
+      }
+      if (n == 0)
+        return;
+    }
+    break;
+    case TtsPack::State::wav: {
+      const auto sz = static_cast<int>(ttsPack.wav.size() * sizeof(ttsPack.wav[0]));
+      const auto n =
+        ttsPyProc.readsome(reinterpret_cast<char *>(ttsPack.wav.data()) + ttsPack.pos, sz - ttsPack.pos);
+      ttsPack.pos += n;
+      if (ttsPack.pos == sz)
+      {
+        ttsPack.pos = 0;
+        ttsPack.state = TtsPack::State::magicword;
+        LOG("wav");
+        audio.lock();
+        std::copy(std::begin(ttsPack.wav), std::end(ttsPack.wav), std::back_inserter(wav));
+        audio.unlock();
+
+        ttsPack.wav = {};
+      }
+      if (n == 0)
+        return;
+    }
+    break;
+    }
+  }
+}
