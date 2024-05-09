@@ -27,12 +27,9 @@ App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
       return ret;
     }()),
     audio(nullptr, false, &want, &have, 0, [this](Uint8 *stream, int len) {
-      const auto sz = std::min(wav.size() * sizeof(int16_t), static_cast<size_t>(len));
-      SDL_memcpy(stream, wav.data(), sz);
-      wav.erase(wav.begin(), wav.begin() + sz / sizeof(int16_t));
-      // zero the rest
-      SDL_memset(stream + sz, 0, len - sz);
-      return sz;
+      for (auto i = 0; i < len / 2; ++i)
+        reinterpret_cast<int16_t *>(stream)[i] = getSpeedAdjustedSample();
+      return len;
     })
 {
   audio.pause(false);
@@ -166,15 +163,22 @@ auto App::tick() -> void
     auto window = Ui::Window("Books");
     tmpBooks.clear();
     tmpBooks2.clear();
+    auto idx = 1;
     for (const auto &book : books)
     {
       std::ostringstream ss;
-      ss << book.stem().stem();
+      ss << idx++ << ". " << book.stem().stem();
+      if (ss.str().empty())
+      {
+        LOG("No title for book", book);
+        continue;
+      }
       tmpBooks2.push_back(ss.str());
-      tmpBooks.push_back(tmpBooks2.back().c_str());
     }
+    for (const auto &book : tmpBooks2)
+      tmpBooks.push_back(book.c_str());
 
-    float listBoxHeight = ImGui::GetContentRegionAvail().y;
+    const auto listBoxHeight = ImGui::GetContentRegionAvail().y;
 
     if (ImGui::BeginListBox("Books List", ImVec2(-1, listBoxHeight)))
     {
@@ -189,17 +193,54 @@ auto App::tick() -> void
 
         // Set the initial focus when opening the listbox
         if (is_selected)
+        {
           ImGui::SetItemDefaultFocus();
+          if (justStarted)
+          {
+            ImGui::SetScrollHereY(0.5f); // Center the item vertically in the list box if possible
+            justStarted = false;
+          }
+        }
       }
       ImGui::EndListBox();
     }
   }
 
+  renderBook();
+
+  ImGui::Render();
+  glClearColor(.2f, .2f, .2f, 1.f);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+  auto &io = ImGui::GetIO();
+
+  // Update and Render additional Platform Windows
+  // (Platform functions may change the current OpenGL context, so we save/restore it to make it
+  // easier to paste this code elsewhere.
+  //  For this specific demo app we could also call SDL_GL_MakeCurrent(window, gl_context) directly)
+  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+  {
+    SDL_Window *backup_current_window = SDL_GL_GetCurrentWindow();
+    SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault();
+    SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+  }
+
+  window.get().glSwap();
+  processTts();
+}
+
+auto App::renderBook() -> void
+{
   if (selectedBook >= 0 && selectedBook < static_cast<int>(books.size()))
   {
     auto window = Ui::Window("Book");
     const auto &book = books[selectedBook];
     ImGui::Text("%s", book.stem().stem().c_str());
+    ImGui::SameLine();
     if (!isReading)
     {
       if (ImGui::Button("Play"))
@@ -213,19 +254,34 @@ auto App::tick() -> void
       if (ImGui::Button("Stop"))
         isReading = false;
     }
-
-    float availableHeight = ImGui::GetContentRegionAvail().y;
+    ImGui::SameLine();
+    ImGui::SliderFloat("x##Reading Speed", &save.readingSpeed, 0.5f, 4.f, "%.2f");
+    const auto availableHeight = ImGui::GetContentRegionAvail().y;
 
     ImGui::BeginChild("Scrolling",
                       ImVec2(0, availableHeight), // Use available height instead of fixed height
                       false,
                       0);
+    ImGui::TextWrapped("%s", bookContent.c_str());
 
     const auto windowWidth = ImGui::GetWindowWidth();
+    const auto scrollMax = ImGui::GetScrollMaxY();
+    if (scrollMax <= 0)
+    {
+      ImGui::EndChild();
+      return;
+    }
     if (totalBookHeight < 0)
     {
       totalBookHeight = ImGui::CalcTextSize(bookContent.c_str(), nullptr, false, windowWidth).y;
-      LOG("totalBookHeight:", totalBookHeight);
+      LOG("totalBookHeight:", totalBookHeight, "Scroll Max", scrollMax);
+    }
+
+    const auto MagicK = (scrollMax + availableHeight) / totalBookHeight;
+    if (MagicK > 1.1 || MagicK < 0.9)
+    {
+      ImGui::EndChild();
+      return;
     }
 
     if (readingPos < 0 && isReading)
@@ -237,7 +293,8 @@ auto App::tick() -> void
       {
         const auto nextPos = startPos + (endPos - startPos) / 2;
         const auto heightAtPos =
-          ImGui::CalcTextSize(bookContent.c_str(), bookContent.c_str() + nextPos, false, windowWidth).y;
+          ImGui::CalcTextSize(bookContent.c_str(), bookContent.c_str() + nextPos, false, windowWidth).y *
+          MagicK;
         if (heightAtPos < currentScrollY)
           startPos = nextPos;
         else
@@ -289,54 +346,31 @@ auto App::tick() -> void
       ttsPyProc << tokenId++ << ",p364," << updateUtf8Punctuation(std::move(paragraph)) << std::endl;
     }
 
-    ImGui::TextWrapped("%s", bookContent.c_str());
     if (updateScrollBar >= 0)
     {
       const auto heightAtPos =
         ImGui::CalcTextSize(
           bookContent.c_str(), bookContent.c_str() + updateScrollBar, false, windowWidth)
-          .y;
-      desieredScroll = heightAtPos - availableHeight / 7.f;
+          .y *
+        MagicK;
+      desiredScroll = std::min(std::max(0.f, heightAtPos - 3 * ImGui::GetFontSize()), scrollMax);
+      LOG("desiredScroll:", desiredScroll, "heightAtPos", heightAtPos, "MagicK", MagicK);
     }
 
-    if (desieredScroll >= 0)
+    if (desiredScroll >= 0)
     {
       const auto currentScrollY = ImGui::GetScrollY();
-      if (abs(currentScrollY - desieredScroll) < 10.f)
+      if (abs(currentScrollY - desiredScroll) < 20.f)
       {
-        ImGui::SetScrollY(desieredScroll);
-        desieredScroll = -1.f;
+        ImGui::SetScrollY(desiredScroll);
+        desiredScroll = -1.f;
       }
       else
-        ImGui::SetScrollY(currentScrollY + (desieredScroll - currentScrollY) * .05f);
+        ImGui::SetScrollY(currentScrollY + (desiredScroll - currentScrollY) * .05f);
     }
 
     ImGui::EndChild();
   }
-
-  ImGui::Render();
-  glClearColor(.2f, .2f, .2f, 1.f);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-  auto &io = ImGui::GetIO();
-
-  // Update and Render additional Platform Windows
-  // (Platform functions may change the current OpenGL context, so we save/restore it to make it
-  // easier to paste this code elsewhere.
-  //  For this specific demo app we could also call SDL_GL_MakeCurrent(window, gl_context) directly)
-  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-  {
-    SDL_Window *backup_current_window = SDL_GL_GetCurrentWindow();
-    SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
-    ImGui::UpdatePlatformWindows();
-    ImGui::RenderPlatformWindowsDefault();
-    SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
-  }
-
-  window.get().glSwap();
-  processTts();
 }
 
 App::~App()
@@ -357,12 +391,31 @@ auto App::scanBooks() -> void
     std::ostringstream ss;
     ss << p.path();
     auto strPath = ss.str();
-    const auto pos = strPath.find(".epub.txt");
-    if (pos != strPath.size() - strlen(".epub.txt") - 1)
+    if (![&]() {
+          auto pos = strPath.find(".epub.txt");
+          if (pos == strPath.size() - strlen(".epub.txt") - 1)
+            return true;
+          pos = strPath.find(".EPUB.TXT");
+          if (pos == strPath.size() - strlen(".EPUB.TXT") - 1)
+            return true;
+          pos = strPath.find(".txt");
+          if (pos == strPath.size() - strlen(".txt") - 1)
+            return true;
+          pos = strPath.find(".TXT");
+          if (pos == strPath.size() - strlen(".TXT") - 1)
+            return true;
+          return false;
+        }())
       continue;
 
+    const auto bookName = p.path().stem().stem();
+    if (bookName.empty())
+    {
+      LOG("empty book name:", p.path());
+      continue;
+    }
+    save.books[bookName];
     books.push_back(p.path());
-    save.books[p.path().stem().stem()];
   }
 
   std::sort(std::begin(books), std::end(books));
@@ -370,7 +423,6 @@ auto App::scanBooks() -> void
   for (auto i = 0U; i < books.size(); ++i)
   {
     std::string bookName = books[i].stem().stem();
-    LOG(bookName);
     if (save.selectedBook == bookName)
     {
       LOG("selectedBook:", books[i].stem().stem());
@@ -379,6 +431,7 @@ auto App::scanBooks() -> void
       break;
     }
   }
+  justStarted = true;
 }
 
 auto App::loadBook(const std::filesystem::path &v) -> void
@@ -395,6 +448,7 @@ auto App::loadBook(const std::filesystem::path &v) -> void
   totalBookHeight = -1;
   isReading = false;
   readingPos = save.books[v.stem().stem()].readingPos;
+  LOG("reading pos", readingPos);
   if (readingPos < 0 || readingPos >= static_cast<int>(bookContent.size()))
     readingPos = 0;
   save.selectedBook = v.stem().stem();
@@ -503,5 +557,74 @@ auto updateUtf8Punctuation(std::string str) -> std::string
     else if (ch.size() == 1)
       r += ch;
   }
+  return r;
+}
+
+auto App::getWavSample() -> int16_t
+{
+  if (wav.empty())
+    return 0;
+  const auto r = wav.front();
+  wav.pop_front();
+  return r;
+}
+
+auto App::peekWavSample(int idx) -> int16_t
+{
+  if (idx >= static_cast<int>(wav.size()))
+    return 0;
+  return wav[idx];
+}
+
+auto App::getSpeedAdjustedSample() -> int16_t
+{
+  std::vector<int16_t> buffSum;
+  int cnt = 0;
+  while (speedAdjustedWav.empty())
+  {
+    const auto C = 1;
+    const auto T = 200;
+    std::deque<int16_t> lastSamples;
+    std::vector<int16_t> buff;
+    auto zeroCross = [&]() {
+      for (const auto &s : lastSamples)
+        if (s > 0 || s <= -T)
+          return false;
+      for (auto i = 0; i < C; ++i)
+      {
+        const auto s = peekWavSample(i);
+        if (s < 0 || s >= T)
+          return false;
+      }
+      return true;
+    };
+    while (buff.size() < 384 || !zeroCross())
+    {
+      lastSamples.push_back(getWavSample());
+      expectedPos += 1 / save.readingSpeed;
+      buff.push_back(lastSamples.back());
+      while (lastSamples.size() > C)
+        lastSamples.pop_front();
+    }
+    for (auto i = 0U; i < buff.size(); ++i)
+    {
+      while (buffSum.size() <= i)
+        buffSum.push_back(0);
+      buffSum[i] += buff[i];
+    }
+    ++cnt;
+    if (buffSum.size() + curPos <= expectedPos)
+    {
+      for (auto i = 0U; i < buffSum.size(); ++i)
+        buffSum[i] /= cnt;
+      while (buffSum.size() + curPos <= expectedPos)
+      {
+        curPos += buffSum.size();
+        std::copy(std::begin(buffSum), std::end(buffSum), std::back_inserter(speedAdjustedWav));
+      }
+    }
+  }
+  const auto r = speedAdjustedWav.front();
+  speedAdjustedWav.pop_front();
   return r;
 }

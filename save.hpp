@@ -11,7 +11,8 @@ struct Book
 
 struct Save
 {
-  SER_PROPS(books, selectedBook);
+  SER_PROPS(books, selectedBook, readingSpeed);
   std::map<std::string, Book> books;
   std::string selectedBook;
+  float readingSpeed = 1.f;
 };

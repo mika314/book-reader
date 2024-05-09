@@ -19,6 +19,11 @@ auto Utf8Parser::getCh() -> std::string
       ss.putback(c);
       break;
     }
+    if ((c & 0xc0) == 0xc0 && !r.empty())
+    {
+      ss.putback(c);
+      break;
+    }
     r += c;
   }
   return r;
