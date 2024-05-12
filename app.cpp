@@ -13,6 +13,8 @@
 #include <log/log.hpp>
 #include <sstream>
 
+static const std::string basePath = "/home/mika/Documents/belletristic/en/";
+
 static auto updateUtf8Punctuation(std::string) -> std::string;
 
 App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
@@ -235,6 +237,14 @@ auto App::renderBook() -> void
   {
     auto window = Ui::Window("Book");
     const auto &book = books[selectedBook];
+    auto path = book.parent_path().string();
+    if (path.find(basePath) == 0)
+      path = path.substr(basePath.size());
+    ImGui::Text("%s", path.c_str());
+    ImGui::SameLine();
+    if (ImGui::Button("Copy"))
+      ImGui::SetClipboardText(books[selectedBook].parent_path().c_str());
+
     ImGui::Text("%s", book.stem().stem().c_str());
     ImGui::SameLine();
     if (!isReading)
@@ -420,7 +430,7 @@ auto App::scanBooks() -> void
     jsonDeser(f, save);
 
   books.clear();
-  for (auto &p : std::filesystem::recursive_directory_iterator("/home/mika/Documents/belletristic/en"))
+  for (auto &p : std::filesystem::recursive_directory_iterator(basePath))
   {
     std::ostringstream ss;
     ss << p.path();
