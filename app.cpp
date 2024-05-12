@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 #include <log/log.hpp>
 #include <sstream>
 
@@ -159,27 +160,19 @@ auto App::tick() -> void
     ImGui::EndMainMenuBar();
   }
 
+  if (ImGui::IsKeyReleased(ImGuiKey_S) && ImGui::GetIO().KeyCtrl)
+  {
+    auto f = std::ofstream{"save.json"};
+    jsonSer(f, save);
+  }
+  if ((ImGui::IsKeyReleased(ImGuiKey_Q) && ImGui::GetIO().KeyCtrl))
+    done = true;
+
   {
     auto window = Ui::Window("Books");
-    tmpBooks.clear();
-    tmpBooks2.clear();
-    auto idx = 1;
-    for (const auto &book : books)
-    {
-      std::ostringstream ss;
-      ss << idx++ << ". " << book.stem().stem();
-      if (ss.str().empty())
-      {
-        LOG("No title for book", book);
-        continue;
-      }
-      tmpBooks2.push_back(ss.str());
-    }
-    for (const auto &book : tmpBooks2)
-      tmpBooks.push_back(book.c_str());
+    processSearch();
 
     const auto listBoxHeight = ImGui::GetContentRegionAvail().y;
-
     if (ImGui::BeginListBox("Books List", ImVec2(-1, listBoxHeight)))
     {
       for (auto i = 0; i < static_cast<int>(tmpBooks.size()); ++i)
@@ -187,18 +180,21 @@ auto App::tick() -> void
         const auto is_selected = (selectedBook == i);
         if (ImGui::Selectable(tmpBooks[i], is_selected))
         {
-          selectedBook = i;
-          loadBook(books[i]);
+          if (selectedBook != i)
+          {
+            selectedBook = i;
+            loadBook(books[i]);
+          }
         }
 
         // Set the initial focus when opening the listbox
         if (is_selected)
         {
           ImGui::SetItemDefaultFocus();
-          if (justStarted)
+          if (needResetScroll)
           {
             ImGui::SetScrollHereY(0.5f); // Center the item vertically in the list box if possible
-            justStarted = false;
+            needResetScroll = false;
           }
         }
       }
@@ -254,7 +250,20 @@ auto App::renderBook() -> void
       if (ImGui::Button("Stop"))
         isReading = false;
     }
-    ImGui::SameLine();
+
+    if (ImGui::IsKeyReleased(ImGuiKey_Space) && !searchActive)
+    {
+      if (!isReading)
+      {
+        isReading = true;
+        readingPos = -1;
+      }
+      else
+      {
+        isReading = false;
+      }
+    }
+
     ImGui::SliderFloat("x##Reading Speed", &save.readingSpeed, 0.5f, 4.f, "%.2f");
     const auto availableHeight = ImGui::GetContentRegionAvail().y;
 
@@ -263,7 +272,6 @@ auto App::renderBook() -> void
                       false,
                       0);
     ImGui::TextWrapped("%s", bookContent.c_str());
-
     const auto windowWidth = ImGui::GetWindowWidth();
     const auto scrollMax = ImGui::GetScrollMaxY();
     if (scrollMax <= 0)
@@ -282,6 +290,24 @@ auto App::renderBook() -> void
     {
       ImGui::EndChild();
       return;
+    }
+    if (ImGui::IsWindowHovered())
+    {
+      if (ImGui::IsMouseDown(0))
+      {
+        float scroll_delta = ImGui::GetIO().MouseDelta.y;
+        lastScrollDelta = scroll_delta;
+        ImGui::SetScrollY(ImGui::GetScrollY() - scroll_delta);
+        desiredScroll = -1;
+      }
+      else
+      {
+        if (lastScrollDelta != 0)
+        {
+          desiredScroll = std::min(std::max(0.f, ImGui::GetScrollY() - 50 * lastScrollDelta), scrollMax);
+          lastScrollDelta = 0;
+        }
+      }
     }
 
     if (readingPos < 0 && isReading)
@@ -342,7 +368,7 @@ auto App::renderBook() -> void
            ++readingPos)
         paragraph += bookContent[readingPos];
 
-      cooldown = now + 200 + paragraph.size() * 4;
+      cooldown = now + 200 + paragraph.size() * 16;
       ttsPyProc << tokenId++ << ",p364," << updateUtf8Punctuation(std::move(paragraph)) << std::endl;
     }
 
@@ -360,13 +386,21 @@ auto App::renderBook() -> void
     if (desiredScroll >= 0)
     {
       const auto currentScrollY = ImGui::GetScrollY();
-      if (abs(currentScrollY - desiredScroll) < 20.f)
+      const auto diff = (desiredScroll - currentScrollY) * .05f;
+      if (abs(diff) < .1f)
       {
         ImGui::SetScrollY(desiredScroll);
         desiredScroll = -1.f;
       }
+      else if (abs(diff) < 1.f)
+      {
+        if (diff > 0)
+          ImGui::SetScrollY(currentScrollY + 1);
+        else
+          ImGui::SetScrollY(currentScrollY - 1);
+      }
       else
-        ImGui::SetScrollY(currentScrollY + (desiredScroll - currentScrollY) * .05f);
+        ImGui::SetScrollY(currentScrollY + diff);
     }
 
     ImGui::EndChild();
@@ -431,7 +465,24 @@ auto App::scanBooks() -> void
       break;
     }
   }
-  justStarted = true;
+  tmpBooks.clear();
+  tmpBooks2.clear();
+  auto idx = 1;
+  for (const auto &book : books)
+  {
+    std::ostringstream ss;
+    ss << idx++ << ". " << book.stem().stem();
+    if (ss.str().empty())
+    {
+      LOG("No title for book", book);
+      continue;
+    }
+    tmpBooks2.push_back(ss.str());
+  }
+  for (const auto &book : tmpBooks2)
+    tmpBooks.push_back(book.c_str());
+
+  needResetScroll = true;
 }
 
 auto App::loadBook(const std::filesystem::path &v) -> void
@@ -627,4 +678,67 @@ auto App::getSpeedAdjustedSample() -> int16_t
   const auto r = speedAdjustedWav.front();
   speedAdjustedWav.pop_front();
   return r;
+}
+
+auto App::processSearch() -> void
+{
+  auto search = [&](auto offset) {
+    auto niddle = searchString;
+    std::transform(std::begin(searchString), std::end(searchString), std::begin(niddle), ::tolower);
+
+    for (auto i = 0U; i < tmpBooks2.size(); ++i)
+    {
+      const auto idx = static_cast<int>((i + std::max(0, selectedBook + offset)) % tmpBooks2.size());
+      auto bookName = tmpBooks2[idx];
+      std::transform(std::begin(bookName), std::end(bookName), std::begin(bookName), ::tolower);
+      if (bookName.find(niddle) != std::string::npos)
+      {
+        if (selectedBook != idx)
+        {
+          selectedBook = idx;
+          needResetScroll = true;
+        }
+        break;
+      }
+    }
+  };
+
+  if (ImGui::IsKeyReleased(ImGuiKey_F) && ImGui::GetIO().KeyCtrl)
+  {
+    if (!searchActive)
+    {
+      searchActive = true;
+      searchString.clear();
+      lastSelectedItem = selectedBook;
+    }
+    else
+      search(1);
+  }
+  if (searchActive)
+  {
+    search(0);
+    ImGui::SetKeyboardFocusHere();
+    if (ImGui::InputText("Search", &searchString, ImGuiInputTextFlags_EnterReturnsTrue))
+    {
+      ImGui::SetKeyboardFocusHere();
+      searchActive = false;
+    }
+    ImGui::Separator();
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter))
+    {
+      if (selectedBook == -1)
+      {
+        selectedBook = lastSelectedItem;
+        needResetScroll = true;
+      }
+      searchActive = false;
+      loadBook(books[selectedBook]);
+    }
+    else if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+    {
+      selectedBook = lastSelectedItem;
+      needResetScroll = true;
+      searchActive = false;
+    }
+  }
 }

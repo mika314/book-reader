@@ -53,13 +53,18 @@ private:
   Save save;
   bool needToUpdateScrollBar = false;
   float desiredScroll = -1.f;
-  bool justStarted = true;
+  bool needResetScroll = true;
+  float lastScrollDelta = 0.f;
+  bool searchActive = false;
+  std::string searchString;
+  int lastSelectedItem = -1;
 
-  auto loadBook(const std::filesystem::path &) -> void;
-  auto processTts() -> void;
-  auto scanBooks() -> void;
-  auto renderBook() -> void;
-  auto getWavSample() -> int16_t;
-  auto peekWavSample(int) -> int16_t;
   auto getSpeedAdjustedSample() -> int16_t;
+  auto getWavSample() -> int16_t;
+  auto loadBook(const std::filesystem::path &) -> void;
+  auto peekWavSample(int) -> int16_t;
+  auto processSearch() -> void;
+  auto processTts() -> void;
+  auto renderBook() -> void;
+  auto scanBooks() -> void;
 };
