@@ -245,8 +245,6 @@ auto App::renderBook() -> void
     if (ImGui::Button("Copy"))
       ImGui::SetClipboardText(books[selectedBook].parent_path().c_str());
 
-    ImGui::Text("%s", book.stem().stem().c_str());
-    ImGui::SameLine();
     if (!isReading)
     {
       if (ImGui::Button("Play"))
@@ -260,7 +258,6 @@ auto App::renderBook() -> void
       if (ImGui::Button("Stop"))
         isReading = false;
     }
-
     if (ImGui::IsKeyReleased(ImGuiKey_Space) && !searchActive)
     {
       if (!isReading)
@@ -273,8 +270,14 @@ auto App::renderBook() -> void
         isReading = false;
       }
     }
-
-    ImGui::SliderFloat("x##Reading Speed", &save.readingSpeed, 0.5f, 4.f, "%.2f");
+    ImGui::SameLine();
+    {
+      ImGui::PushItemWidth(100);
+      ImGui::SliderFloat("x##Reading Speed", &save.readingSpeed, 0.5f, 4.f, "%.2f");
+      ImGui::PopItemWidth();
+    }
+    ImGui::SameLine();
+    ImGui::Text("%s", book.stem().stem().c_str());
     const auto availableHeight = ImGui::GetContentRegionAvail().y;
 
     ImGui::BeginChild("Scrolling",
