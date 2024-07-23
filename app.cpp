@@ -1,7 +1,6 @@
 #include "app.hpp"
 #include "imgui-impl-opengl3.h"
 #include "imgui-impl-sdl.h"
-#include "json-ser.hpp"
 #include "ui.hpp"
 #include "utf8-parser.hpp"
 #include <SDL_opengl.h>
@@ -10,6 +9,7 @@
 #include <fstream>
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+#include <json-ser/json-ser.hpp>
 #include <log/log.hpp>
 #include <sstream>
 
@@ -20,10 +20,9 @@ static auto updateUtf8Punctuation(std::string) -> std::string;
 App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
   : window(aWindow),
     gl_context(SDL_GL_CreateContext(window.get().get())),
-    ttsPyProc("/usr/bin/python ./tts_v2.py tts_models/en/vctk/vits"),
     want([]() {
       SDL_AudioSpec ret;
-      ret.freq = 22050;
+      ret.freq = 24000;
       ret.format = AUDIO_S16;
       ret.channels = 1;
       ret.samples = 4096;
@@ -31,7 +30,7 @@ App::App(sdl::Window &aWindow, int /*argc*/, const char * /*argv*/[])
     }()),
     audio(nullptr, false, &want, &have, 0, [this](Uint8 *stream, int len) {
       for (auto i = 0; i < len / 2; ++i)
-        reinterpret_cast<int16_t *>(stream)[i] = getSpeedAdjustedSample();
+        reinterpret_cast<int16_t *>(stream)[i] = getWavSample();
       return len;
     })
 {
@@ -228,7 +227,6 @@ auto App::tick() -> void
   }
 
   window.get().glSwap();
-  processTts();
 }
 
 auto App::renderBook() -> void
@@ -365,8 +363,6 @@ auto App::renderBook() -> void
 
     if (isReading && !isTalking && cooldown < now)
     {
-      static int tokenId = 0;
-
       updateScrollBar = readingPos;
       save.books[save.selectedBook].readingPos = readingPos;
 
@@ -375,14 +371,25 @@ auto App::renderBook() -> void
            ++readingPos)
       {
       }
-      auto paragraph = std::string{};
+      auto sentence = std::string{};
       // read until \n
-      for (; readingPos < static_cast<int>(bookContent.size()) && bookContent[readingPos] != '\n';
+      for (; readingPos < static_cast<int>(bookContent.size()) &&
+             ((bookContent[readingPos] != '\n' && bookContent[readingPos] != '.' &&
+               bookContent[readingPos] != '?' && bookContent[readingPos] != '!') ||
+              sentence.size() < 100);
            ++readingPos)
-        paragraph += bookContent[readingPos];
+        sentence += bookContent[readingPos];
+      if (readingPos < static_cast<int>(bookContent.size()))
+      {
+        sentence += bookContent[readingPos];
+        ++readingPos;
+      }
 
-      cooldown = now + 200 + paragraph.size() * 16;
-      ttsPyProc << tokenId++ << ",p364," << updateUtf8Punctuation(std::move(paragraph)) << std::endl;
+      cooldown = now + 200 + sentence.size() * 16;
+
+      LOG(sentence);
+      auto [s, w] = tts(updateUtf8Punctuation(std::move(sentence)), save.readingSpeed);
+      wav.insert(wav.end(), std::begin(w), std::end(w));
     }
 
     if (updateScrollBar >= 0)
@@ -520,86 +527,6 @@ auto App::loadBook(const std::filesystem::path &v) -> void
   needToUpdateScrollBar = true;
 }
 
-auto App::processTts() -> void
-{
-  ttsPyProc.clear();
-
-  for (;;)
-  {
-    switch (ttsPack.state)
-    {
-    case TtsPack::State::magicword: {
-      const auto n = ttsPyProc.readsome(reinterpret_cast<char *>(&ttsPack.magicword) + ttsPack.pos,
-                                        sizeof(ttsPack.magicword) - ttsPack.pos);
-      ttsPack.pos += n;
-      if (ttsPack.pos == sizeof(ttsPack.magicword))
-      {
-        if (std::string_view{ttsPack.magicword.data(), ttsPack.magicword.size()} !=
-            std::string_view{"TTS\0", 4})
-        {
-          LOG("Invalid magic word");
-          for (auto i = 0U; i < ttsPack.magicword.size(); ++i)
-            LOG(static_cast<unsigned>(ttsPack.magicword[i]));
-          return;
-        }
-        ttsPack.pos = 0;
-        ttsPack.state = TtsPack::State::size;
-      }
-      if (n == 0)
-        return;
-    }
-    break;
-    case TtsPack::State::size: {
-      const auto n = ttsPyProc.readsome(reinterpret_cast<char *>(&ttsPack.size) + ttsPack.pos,
-                                        sizeof(ttsPack.size) - ttsPack.pos);
-      ttsPack.pos += n;
-      if (ttsPack.pos == sizeof(ttsPack.size))
-      {
-        ttsPack.wav.resize(ttsPack.size / sizeof(ttsPack.wav[0]));
-        ttsPack.pos = 0;
-        ttsPack.state = TtsPack::State::tokenId;
-      }
-      if (n == 0)
-        return;
-    }
-    break;
-    case TtsPack::State::tokenId: {
-      const auto n = ttsPyProc.readsome(reinterpret_cast<char *>(&ttsPack.tokenId) + ttsPack.pos,
-                                        sizeof(ttsPack.tokenId) - ttsPack.pos);
-      ttsPack.pos += n;
-      if (ttsPack.pos == sizeof(ttsPack.tokenId))
-      {
-        ttsPack.pos = 0;
-        ttsPack.state = TtsPack::State::wav;
-      }
-      if (n == 0)
-        return;
-    }
-    break;
-    case TtsPack::State::wav: {
-      const auto sz = static_cast<int>(ttsPack.wav.size() * sizeof(ttsPack.wav[0]));
-      const auto n =
-        ttsPyProc.readsome(reinterpret_cast<char *>(ttsPack.wav.data()) + ttsPack.pos, sz - ttsPack.pos);
-      ttsPack.pos += n;
-      if (ttsPack.pos == sz)
-      {
-        ttsPack.pos = 0;
-        ttsPack.state = TtsPack::State::magicword;
-        LOG("wav");
-        audio.lock();
-        std::copy(std::begin(ttsPack.wav), std::end(ttsPack.wav), std::back_inserter(wav));
-        audio.unlock();
-
-        ttsPack.wav = {};
-      }
-      if (n == 0)
-        return;
-    }
-    break;
-    }
-  }
-}
-
 auto updateUtf8Punctuation(std::string str) -> std::string
 {
   auto parser = Utf8Parser(std::move(str));
@@ -638,59 +565,6 @@ auto App::peekWavSample(int idx) -> int16_t
   if (idx >= static_cast<int>(wav.size()))
     return 0;
   return wav[idx];
-}
-
-auto App::getSpeedAdjustedSample() -> int16_t
-{
-  std::vector<int16_t> buffSum;
-  int cnt = 0;
-  while (speedAdjustedWav.empty())
-  {
-    const auto C = 1;
-    const auto T = 200;
-    std::deque<int16_t> lastSamples;
-    std::vector<int16_t> buff;
-    auto zeroCross = [&]() {
-      for (const auto &s : lastSamples)
-        if (s > 0 || s <= -T)
-          return false;
-      for (auto i = 0; i < C; ++i)
-      {
-        const auto s = peekWavSample(i);
-        if (s < 0 || s >= T)
-          return false;
-      }
-      return true;
-    };
-    while (buff.size() < 384 || !zeroCross())
-    {
-      lastSamples.push_back(getWavSample());
-      expectedPos += 1 / save.readingSpeed;
-      buff.push_back(lastSamples.back());
-      while (lastSamples.size() > C)
-        lastSamples.pop_front();
-    }
-    for (auto i = 0U; i < buff.size(); ++i)
-    {
-      while (buffSum.size() <= i)
-        buffSum.push_back(0);
-      buffSum[i] += buff[i];
-    }
-    ++cnt;
-    if (buffSum.size() + curPos <= expectedPos)
-    {
-      for (auto i = 0U; i < buffSum.size(); ++i)
-        buffSum[i] /= cnt;
-      while (buffSum.size() + curPos <= expectedPos)
-      {
-        curPos += buffSum.size();
-        std::copy(std::begin(buffSum), std::end(buffSum), std::back_inserter(speedAdjustedWav));
-      }
-    }
-  }
-  const auto r = speedAdjustedWav.front();
-  speedAdjustedWav.pop_front();
-  return r;
 }
 
 auto App::processSearch() -> void

@@ -37,7 +37,7 @@
       "readingPos": 0
     },
     "A Brief History of Time by Stephen Hawking": {
-      "readingPos": 22608
+      "readingPos": 1082
     },
     "A Choice of Hatreds - C. L. Werner": {
       "readingPos": 0
@@ -79,7 +79,7 @@
       "readingPos": 246
     },
     "A Game of Thrones_ Illustrated Edition - George R.R. Martin": {
-      "readingPos": 28778
+      "readingPos": 39412
     },
     "A Maze Of Death v1": {
       "readingPos": 0
@@ -130,7 +130,7 @@
       "readingPos": 0
     },
     "Alexandre Dumas - the three musketeers": {
-      "readingPos": 0
+      "readingPos": 7232
     },
     "All is Dust - John French": {
       "readingPos": 0
@@ -901,7 +901,7 @@
       "readingPos": 0
     },
     "George R.R. Martin - A Game of Thrones -  Book 1": {
-      "readingPos": 0
+      "readingPos": 10084
     },
     "George R.R. Martin - A Storm of Swords - Book 3": {
       "readingPos": 0
@@ -3703,6 +3703,6 @@
       "readingPos": 0
     }
   },
-  "selectedBook": "Murakami, Haruki - 1Q84 (Knopf, 2011)",
-  "readingSpeed": 1
+  "selectedBook": "A Game of Thrones_ Illustrated Edition - George R.R. Martin",
+  "readingSpeed": 1.9
 }

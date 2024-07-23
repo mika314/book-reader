@@ -1,6 +1,6 @@
 #pragma once
-#include "pstream.h"
 #include "save.hpp"
+#include "text-to-speech.hpp"
 #include <deque>
 #include <filesystem>
 #include <sdlpp/sdlpp.hpp>
@@ -16,20 +16,6 @@ public:
   bool done = false;
 
 private:
-  struct TtsPack
-  {
-    enum class State { magicword, size, tokenId, wav };
-
-    State state = State::magicword;
-    int pos = 0;
-    std::array<char, 4> magicword;
-    int32_t size;
-    std::array<char, 10> tokenId;
-    std::vector<int16_t> wav;
-
-    auto reset() -> void;
-  };
-
   std::reference_wrapper<sdl::Window> window;
   SDL_GLContext gl_context;
   std::vector<std::filesystem::path> books;
@@ -40,13 +26,10 @@ private:
   float totalBookHeight = -1;
   bool isReading = false;
   int readingPos = 0;
-  redi::pstream ttsPyProc;
-  TtsPack ttsPack;
   SDL_AudioSpec want;
   SDL_AudioSpec have;
   sdl::Audio audio;
   std::deque<int16_t> wav;
-  std::deque<int16_t> speedAdjustedWav;
   double curPos = 0;
   double expectedPos = 0;
   Uint32 cooldown = 0;
@@ -58,6 +41,7 @@ private:
   bool searchActive = false;
   std::string searchString;
   int lastSelectedItem = -1;
+  TextToSpeech tts;
 
   auto getSpeedAdjustedSample() -> int16_t;
   auto getWavSample() -> int16_t;
