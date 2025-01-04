@@ -43,7 +43,7 @@ auto TextToSpeech::operator()(const std::string &text, float rate) const
   /* parameters for different voices in the configuration file. */
   params.absolute_rate = rate - 1.f;
   params.absolute_pitch = 0.;
-  params.absolute_volume = 0.;
+  params.absolute_volume = 1.;
   /* Relative values, in case someone needs them. */
   /* If you don't, just set each of them to 1. */
   params.relative_rate = 1.;

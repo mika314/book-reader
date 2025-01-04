@@ -373,9 +373,9 @@ auto App::renderBook() -> void
       }
       auto sentence = std::string{};
       // read until \n
-      for (; readingPos < static_cast<int>(bookContent.size()) &&
-             ((bookContent[readingPos] != '\n' && bookContent[readingPos] != '.' &&
-               bookContent[readingPos] != '?' && bookContent[readingPos] != '!') ||
+      for (; readingPos < static_cast<int>(bookContent.size()) && bookContent[readingPos] != '\n' &&
+             ((bookContent[readingPos] != '.' && bookContent[readingPos] != '?' &&
+               bookContent[readingPos] != '!') ||
               sentence.size() < 100);
            ++readingPos)
         sentence += bookContent[readingPos];
