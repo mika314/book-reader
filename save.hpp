@@ -5,14 +5,15 @@
 
 struct Book
 {
-  SER_PROPS(readingPos);
+  SER_PROPS(readingPos)
   int readingPos = 0;
 };
 
 struct Save
 {
-  SER_PROPS(books, selectedBook, readingSpeed);
+  SER_PROPS(books, selectedBook, readingSpeed, currentVoice)
   std::map<std::string, Book> books;
   std::string selectedBook;
   float readingSpeed = 1.f;
+  int currentVoice = 4;
 };

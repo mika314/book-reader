@@ -1,0 +1,4 @@
+[[library]]
+type="pkgconfig"
+name="sherpa-onnx"
+includes=["sherpa-onnx/c-api/c-api.h", "sherpa-onnx/c-api/cxx-api.h"]

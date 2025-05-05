@@ -1,0 +1,2 @@
+localRepository="coddle-repo"
+cflags="-Weverything -Wno-cast-qual -Wno-cast-align -Wno-implicit-float-conversion -Wno-float-conversion -Wno-shorten-64-to-32 -Wno-weak-vtables -Wno-old-style-cast -Wno-reserved-identifier -Wno-reserved-macro-identifier -Wno-sign-conversion -Wno-shadow-field-in-constructor -Wno-padded -Wno-shift-sign-overflow -Wno-gnu-zero-variadic-macro-arguments -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-unreachable-code-loop-increment -Wno-exit-time-destructors"

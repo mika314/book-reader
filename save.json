@@ -1846,7 +1846,7 @@
       "readingPos": 0
     },
     "Murakami, Haruki - 1Q84 (Knopf, 2011)": {
-      "readingPos": 3388
+      "readingPos": 78757
     },
     "Murakami, Haruki - A Wild Sheep Chase (Vintage, 2002)": {
       "readingPos": 0
@@ -4295,5 +4295,6 @@
     }
   },
   "selectedBook": "Murakami, Haruki - 1Q84 (Knopf, 2011)",
-  "readingSpeed": 1.75
+  "readingSpeed": 1.7,
+  "currentVoice": 1
 }

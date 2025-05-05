@@ -13,7 +13,7 @@
 #include <log/log.hpp>
 #include <sstream>
 
-static const std::string basePath = "/home/mika/Documents/belletristic/en/";
+static const char *basePath = "/home/mika/Documents/belletristic/en/";
 
 static auto updateUtf8Punctuation(std::string) -> std::string;
 
@@ -170,7 +170,7 @@ auto App::tick() -> void
     done = true;
 
   {
-    auto window = Ui::Window("Books");
+    auto w = Ui::Window("Books");
     processSearch();
 
     const auto listBoxHeight = ImGui::GetContentRegionAvail().y;
@@ -229,15 +229,27 @@ auto App::tick() -> void
   window.get().glSwap();
 }
 
+static const char *ttsVoices[] = {"Female",
+                                  "Bella (F)",
+                                  "Nicole (F)",
+                                  "Sarah (F)",
+                                  "Sky (F)",
+                                  "Adam (M)",
+                                  "Michael (M)",
+                                  "Emma (F)",
+                                  "Isabella (F)",
+                                  "George (M)",
+                                  "Lewis (M)"};
+
 auto App::renderBook() -> void
 {
   if (selectedBook >= 0 && selectedBook < static_cast<int>(books.size()))
   {
-    auto window = Ui::Window("Book");
+    auto w = Ui::Window("Book");
     const auto &book = books[selectedBook];
     auto path = book.parent_path().string();
     if (path.find(basePath) == 0)
-      path = path.substr(basePath.size());
+      path = path.substr(strlen(basePath));
     ImGui::Text("%s", path.c_str());
     ImGui::SameLine();
     if (ImGui::Button("Copy"))
@@ -270,24 +282,32 @@ auto App::renderBook() -> void
     }
     ImGui::SameLine();
     {
-      ImGui::PushItemWidth(100);
+      ImGui::PushItemWidth(200);
       ImGui::SliderFloat("x##Reading Speed", &save.readingSpeed, 0.5f, 4.f, "%.2f");
       ImGui::PopItemWidth();
     }
     ImGui::SameLine();
+    ImGui::PushItemWidth(200);
+    ImGui::Combo("##TTS Voice", &save.currentVoice, ttsVoices, IM_ARRAYSIZE(ttsVoices));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
     ImGui::Text("%s", book.stem().stem().c_str());
     const auto availableHeight = ImGui::GetContentRegionAvail().y;
 
-    ImGui::BeginChild("Scrolling",
-                      ImVec2(0, availableHeight), // Use available height instead of fixed height
-                      false,
-                      0);
-    ImGui::TextWrapped("%s", bookContent.c_str());
     const auto windowWidth = ImGui::GetWindowWidth();
+    ImGui::BeginChild(
+      "Scrolling",
+      ImVec2(0,
+             availableHeight - ImGui::CalcTextSize(currentTtsLine.c_str(), nullptr, false, windowWidth)
+                                 .y), // Use available height instead of fixed height
+      false,
+      0);
+    ImGui::TextWrapped("%s", bookContent.c_str());
     const auto scrollMax = ImGui::GetScrollMaxY();
     if (scrollMax <= 0)
     {
       ImGui::EndChild();
+      ImGui::TextWrapped("%s", currentTtsLine.c_str());
       return;
     }
     if (totalBookHeight < 0)
@@ -297,11 +317,13 @@ auto App::renderBook() -> void
     }
 
     const auto MagicK = (scrollMax + availableHeight) / totalBookHeight;
-    if (MagicK > 1.1 || MagicK < 0.9)
+    if (MagicK > 1.1f || MagicK < .9f)
     {
       ImGui::EndChild();
+      ImGui::TextWrapped("%s", currentTtsLine.c_str());
       return;
     }
+
     if (ImGui::IsWindowHovered())
     {
       if (ImGui::IsMouseDown(0))
@@ -313,7 +335,7 @@ auto App::renderBook() -> void
       }
       else
       {
-        if (lastScrollDelta != 0)
+        if (std::abs(lastScrollDelta) > .5f)
         {
           desiredScroll = std::min(std::max(0.f, ImGui::GetScrollY() - 50 * lastScrollDelta), scrollMax);
           lastScrollDelta = 0;
@@ -325,7 +347,7 @@ auto App::renderBook() -> void
     {
       const auto currentScrollY = ImGui::GetScrollY();
       auto startPos = 0;
-      auto endPos = bookContent.size();
+      auto endPos = static_cast<int>(bookContent.size());
       while (endPos - startPos > 1)
       {
         const auto nextPos = startPos + (endPos - startPos) / 2;
@@ -376,7 +398,7 @@ auto App::renderBook() -> void
       for (; readingPos < static_cast<int>(bookContent.size()) && bookContent[readingPos] != '\n' &&
              ((bookContent[readingPos] != '.' && bookContent[readingPos] != '?' &&
                bookContent[readingPos] != '!') ||
-              sentence.size() < 100);
+              sentence.size() < 50);
            ++readingPos)
         sentence += bookContent[readingPos];
       if (readingPos < static_cast<int>(bookContent.size()))
@@ -385,11 +407,18 @@ auto App::renderBook() -> void
         ++readingPos;
       }
 
-      cooldown = now + 200 + sentence.size() * 16;
-
-      LOG(sentence);
-      auto [s, w] = tts(updateUtf8Punctuation(std::move(sentence)), save.readingSpeed);
-      wav.insert(wav.end(), std::begin(w), std::end(w));
+      if ([&sentence]() {
+            for (auto ch : sentence)
+              if (isalpha(ch))
+                return true;
+            return false;
+          }())
+      {
+        cooldown = now + 200 + static_cast<int>(sentence.size()) * 16;
+        currentTtsLine = updateUtf8Punctuation(std::move(sentence));
+        auto [s, tmpWav] = tts(currentTtsLine, save.readingSpeed, save.currentVoice);
+        wav.insert(wav.end(), std::begin(tmpWav), std::end(tmpWav));
+      }
     }
 
     if (updateScrollBar >= 0)
@@ -400,7 +429,6 @@ auto App::renderBook() -> void
           .y *
         MagicK;
       desiredScroll = std::min(std::max(0.f, heightAtPos - 3 * ImGui::GetFontSize()), scrollMax);
-      LOG("desiredScroll:", desiredScroll, "heightAtPos", heightAtPos, "MagicK", MagicK);
     }
 
     if (desiredScroll >= 0)
@@ -424,6 +452,7 @@ auto App::renderBook() -> void
     }
 
     ImGui::EndChild();
+    ImGui::TextWrapped("%s", currentTtsLine.c_str());
   }
 }
 
@@ -534,9 +563,9 @@ auto updateUtf8Punctuation(std::string str) -> std::string
   for (auto ch = parser.getCh(); !ch.empty(); ch = parser.getCh())
   {
     if (ch == "“" || ch == "”")
-      r += "\"";
+      continue;
     else if (ch == "’")
-      r += "\'";
+      continue;
     else if (ch == "—")
       r += "--";
     else if (ch == "…")
@@ -544,6 +573,8 @@ auto updateUtf8Punctuation(std::string str) -> std::string
     else if (ch.empty())
       continue;
     else if (ch[0] == '\0')
+      continue;
+    else if (ch[0] == '\n')
       continue;
     else if (ch.size() == 1)
       r += ch;

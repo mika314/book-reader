@@ -166,8 +166,8 @@ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
                 ImVec2 clip_max((pcmd->ClipRect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.w - clip_off.y) * clip_scale.y);
                 if (clip_min.x < 0.0f) { clip_min.x = 0.0f; }
                 if (clip_min.y < 0.0f) { clip_min.y = 0.0f; }
-                if (clip_max.x > fb_width) { clip_max.x = static_cast<float>(fb_width); }
-                if (clip_max.y > fb_height) { clip_max.y = static_cast<float>(fb_height); }
+                if (clip_max.x > static_cast<float>(fb_width)) { clip_max.x = static_cast<float>(fb_width); }
+                if (clip_max.y > static_cast<float>(fb_height)) { clip_max.y = static_cast<float>(fb_height); }
                 if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
                     continue;
 
@@ -183,7 +183,7 @@ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
 #endif
 
                 // Bind texture, Draw
-				SDL_Texture* tex = static_cast<SDL_Texture*>(pcmd->GetTexID());
+                SDL_Texture* tex = reinterpret_cast<SDL_Texture*>(pcmd->GetTexID());
                 SDL_RenderGeometryRaw(bd->SDLRenderer, tex,
                     xy, static_cast<int>(sizeof(ImDrawVert)),
                     color, static_cast<int>(sizeof(ImDrawVert)),
@@ -236,7 +236,7 @@ void ImGui_ImplSDLRenderer_DestroyFontsTexture()
     {
         io.Fonts->SetTexID(0);
         SDL_DestroyTexture(bd->FontTexture);
-        bd->FontTexture = NULL;
+        bd->FontTexture = nullptr;
     }
 }
 

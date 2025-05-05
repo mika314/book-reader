@@ -475,7 +475,7 @@ bool ImGui_ImplSDL2_InitForMetal(SDL_Window* window)
 
 bool ImGui_ImplSDL2_InitForSDLRenderer(SDL_Window* window, SDL_Renderer* renderer)
 {
-    return ImGui_ImplSDL2_Init(window, renderer, NULL);
+    return ImGui_ImplSDL2_Init(window, renderer, nullptr);
 }
 
 void ImGui_ImplSDL2_Shutdown()
@@ -491,8 +491,8 @@ void ImGui_ImplSDL2_Shutdown()
     for (ImGuiMouseCursor cursor_n = 0; cursor_n < ImGuiMouseCursor_COUNT; cursor_n++)
         SDL_FreeCursor(bd->MouseCursors[cursor_n]);
 
-    io.BackendPlatformName = NULL;
-    io.BackendPlatformUserData = NULL;
+    io.BackendPlatformName = nullptr;
+    io.BackendPlatformUserData = nullptr;
     IM_DELETE(bd);
 }
 
@@ -648,7 +648,7 @@ static void ImGui_ImplSDL2_UpdateMonitors()
 #endif
 #if SDL_HAS_PER_MONITOR_DPI
         float dpi = 0.0f;
-        if (!SDL_GetDisplayDPI(n, &dpi, NULL, NULL))
+        if (!SDL_GetDisplayDPI(n, &dpi, nullptr, nullptr))
             monitor.DpiScale = dpi / 96.0f;
 #endif
         platform_io.Monitors.push_back(monitor);
@@ -667,7 +667,7 @@ void ImGui_ImplSDL2_NewFrame()
     SDL_GetWindowSize(bd->Window, &w, &h);
     if (SDL_GetWindowFlags(bd->Window) & SDL_WINDOW_MINIMIZED)
         w = h = 0;
-    if (bd->Renderer != NULL)
+    if (bd->Renderer != nullptr)
         SDL_GetRendererOutputSize(bd->Renderer, &display_w, &display_h);
     else
         SDL_GL_GetDrawableSize(bd->Window, &display_w, &display_h);
@@ -709,7 +709,7 @@ struct ImGui_ImplSDL2_ViewportData
     bool            WindowOwned;
     SDL_GLContext   GLContext;
 
-    ImGui_ImplSDL2_ViewportData() { Window = NULL; WindowID = 0; WindowOwned = false; GLContext = NULL; }
+    ImGui_ImplSDL2_ViewportData() { Window = nullptr; WindowID = 0; WindowOwned = false; GLContext = nullptr; }
     ~ImGui_ImplSDL2_ViewportData() { IM_ASSERT(Window == NULL && GLContext == NULL); }
 };
 
@@ -723,8 +723,8 @@ static void ImGui_ImplSDL2_CreateWindow(ImGuiViewport* viewport)
     ImGui_ImplSDL2_ViewportData* main_viewport_data = (ImGui_ImplSDL2_ViewportData*)main_viewport->PlatformUserData;
 
     // Share GL resources with main context
-    bool use_opengl = (main_viewport_data->GLContext != NULL);
-    SDL_GLContext backup_context = NULL;
+    bool use_opengl = (main_viewport_data->GLContext != nullptr);
+    SDL_GLContext backup_context = nullptr;
     if (use_opengl)
     {
         backup_context = SDL_GL_GetCurrentContext();
@@ -772,11 +772,11 @@ static void ImGui_ImplSDL2_DestroyWindow(ImGuiViewport* viewport)
             SDL_GL_DeleteContext(vd->GLContext);
         if (vd->Window && vd->WindowOwned)
             SDL_DestroyWindow(vd->Window);
-        vd->GLContext = NULL;
-        vd->Window = NULL;
+        vd->GLContext = nullptr;
+        vd->Window = nullptr;
         IM_DELETE(vd);
     }
-    viewport->PlatformUserData = viewport->PlatformHandle = NULL;
+    viewport->PlatformUserData = viewport->PlatformHandle = nullptr;
 }
 
 static void ImGui_ImplSDL2_ShowWindow(ImGuiViewport* viewport)

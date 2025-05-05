@@ -42,6 +42,7 @@ private:
   std::string searchString;
   int lastSelectedItem = -1;
   TextToSpeech tts;
+  std::string currentTtsLine;
 
   auto getSpeedAdjustedSample() -> int16_t;
   auto getWavSample() -> int16_t;
