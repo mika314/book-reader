@@ -38,7 +38,7 @@ sudo mv /usr/local/sherpa-onnx.pc /usr/lib/x86_64-linux-gnu/pkgconfig/
    cd ..
    ```
 
-4. **Clone and Build Screen Cast**
+4. **Clone and Build Book Reader**
    ```bash
    git clone https://github.com/mika314/book-reader.git
    cd book-reader
