@@ -23,7 +23,6 @@ private:
   std::vector<std::string> tmpBooks2;
   std::vector<const char *> tmpBooks;
   std::string bookContent;
-  float totalBookHeight = -1;
   bool isReading = false;
   int readingPos = 0;
   SDL_AudioSpec want;
@@ -43,6 +42,7 @@ private:
   int lastSelectedItem = -1;
   TextToSpeech tts;
   std::string currentTtsLine;
+  float scrollY = 0.0f;
 
   auto getSpeedAdjustedSample() -> int16_t;
   auto getWavSample() -> int16_t;

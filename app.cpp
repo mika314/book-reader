@@ -241,6 +241,12 @@ static const char *ttsVoices[] = {"Female",
                                   "George (M)",
                                   "Lewis (M)"};
 
+struct Par
+{
+  std::string_view txt;
+  float h;
+};
+
 auto App::renderBook() -> void
 {
   if (selectedBook >= 0 && selectedBook < static_cast<int>(books.size()))
@@ -292,37 +298,55 @@ auto App::renderBook() -> void
     ImGui::PopItemWidth();
     ImGui::SameLine();
     ImGui::Text("%s", book.stem().stem().c_str());
-    const auto availableHeight = ImGui::GetContentRegionAvail().y;
+    const auto winPos = ImGui::GetCursorScreenPos();
+    const auto avail = ImGui::GetContentRegionAvail();
+    auto viewH = avail.y;
+    ImGui::BeginChild("Scrolling",
+                      ImVec2(avail.x, viewH), // Use available height instead of fixed height
+                      false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    const auto windowWidth = ImGui::GetWindowWidth();
-    ImGui::BeginChild(
-      "Scrolling",
-      ImVec2(0,
-             availableHeight - ImGui::CalcTextSize(currentTtsLine.c_str(), nullptr, false, windowWidth)
-                                 .y), // Use available height instead of fixed height
-      false,
-      0);
-    ImGui::TextWrapped("%s", bookContent.c_str());
-    const auto scrollMax = ImGui::GetScrollMaxY();
-    if (scrollMax <= 0)
+    auto pars = std::vector<Par>{};
     {
-      ImGui::EndChild();
-      ImGui::TextWrapped("%s", currentTtsLine.c_str());
-      return;
-    }
-    if (totalBookHeight < 0)
-    {
-      totalBookHeight = ImGui::CalcTextSize(bookContent.c_str(), nullptr, false, windowWidth).y;
-      LOG("totalBookHeight:", totalBookHeight, "Scroll Max", scrollMax);
-    }
+      const auto winW = ImGui::GetWindowWidth();
+      for (auto b = 0U;;)
+      {
+        auto e = bookContent.find("\n\n", b);
+        Par par;
+        par.txt = std::string_view{std::begin(bookContent) + b,
+                                   e != std::string::npos ? std::begin(bookContent) + e + 2
+                                                          : std::end(bookContent)};
+        const auto sz =
+          ImGui::CalcTextSize(par.txt.data(), par.txt.data() + par.txt.size(), false, winW);
+        par.h = sz.y;
+        pars.push_back(par);
 
-    const auto MagicK = (scrollMax + availableHeight) / totalBookHeight;
-    if (MagicK > 1.1f || MagicK < .9f)
-    {
-      ImGui::EndChild();
-      ImGui::TextWrapped("%s", currentTtsLine.c_str());
-      return;
+        if (e == std::string::npos)
+          break;
+        b = e + 2;
+      }
     }
+    ImGui::PushClipRect(winPos, ImVec2(winPos.x + avail.x, winPos.y + viewH), true);
+    {
+      auto y = 0.0f;
+      for (const auto &par : pars)
+      {
+        const auto h = par.h;
+        if (y + h < scrollY)
+        {
+          y += h;
+          continue;
+        }
+        if (y > scrollY + viewH)
+          break;
+        ImGui::SetCursorScreenPos(ImVec2(winPos.x, winPos.y + (y - scrollY)));
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(par.txt.data(), par.txt.data() + par.txt.size());
+        ImGui::PopTextWrapPos();
+        y += h;
+      }
+    }
+    ImGui::PopClipRect();
 
     if (ImGui::IsWindowHovered())
     {
@@ -330,14 +354,14 @@ auto App::renderBook() -> void
       {
         float scroll_delta = ImGui::GetIO().MouseDelta.y;
         lastScrollDelta = scroll_delta;
-        ImGui::SetScrollY(ImGui::GetScrollY() - scroll_delta);
+        scrollY -= scroll_delta;
         desiredScroll = -1;
       }
       else
       {
         if (std::abs(lastScrollDelta) > .5f)
         {
-          desiredScroll = std::min(std::max(0.f, ImGui::GetScrollY() - 50 * lastScrollDelta), scrollMax);
+          desiredScroll = std::max(0.f, scrollY - 50 * lastScrollDelta);
           lastScrollDelta = 0;
         }
       }
@@ -345,21 +369,21 @@ auto App::renderBook() -> void
 
     if (readingPos < 0 && isReading)
     {
-      const auto currentScrollY = ImGui::GetScrollY();
-      auto startPos = 0;
-      auto endPos = static_cast<int>(bookContent.size());
-      while (endPos - startPos > 1)
+      const auto currentScrollY = scrollY;
+
+      auto y = 0.0f;
+      auto p = 0U;
+      for (const auto &par : pars)
       {
-        const auto nextPos = startPos + (endPos - startPos) / 2;
-        const auto heightAtPos =
-          ImGui::CalcTextSize(bookContent.c_str(), bookContent.c_str() + nextPos, false, windowWidth).y *
-          MagicK;
-        if (heightAtPos < currentScrollY)
-          startPos = nextPos;
-        else
-          endPos = nextPos;
+        if (y >= currentScrollY)
+        {
+          readingPos = p;
+          break;
+        }
+        p += par.txt.size();
+        y += par.h;
       }
-      readingPos = startPos;
+
       save.books[save.selectedBook].readingPos = readingPos;
 
       LOG("readingPos:", readingPos);
@@ -423,36 +447,43 @@ auto App::renderBook() -> void
 
     if (updateScrollBar >= 0)
     {
-      const auto heightAtPos =
-        ImGui::CalcTextSize(
-          bookContent.c_str(), bookContent.c_str() + updateScrollBar, false, windowWidth)
-          .y *
-        MagicK;
-      desiredScroll = std::min(std::max(0.f, heightAtPos - 3 * ImGui::GetFontSize()), scrollMax);
+      auto y = 0.0f;
+      auto p = 0;
+      auto oldY = 0.0f;
+      for (const auto &par : pars)
+      {
+        if (p >= updateScrollBar + static_cast<int>(currentTtsLine.size()) / 2)
+        {
+          desiredScroll = std::max(oldY - viewH / 5.f, 0.0f);
+          break;
+        }
+        oldY = y;
+        y += par.h;
+        p += par.txt.size();
+      }
     }
 
     if (desiredScroll >= 0)
     {
-      const auto currentScrollY = ImGui::GetScrollY();
+      const auto currentScrollY = scrollY;
       const auto diff = (desiredScroll - currentScrollY) * .05f;
       if (abs(diff) < .1f)
       {
-        ImGui::SetScrollY(desiredScroll);
+        scrollY = desiredScroll;
         desiredScroll = -1.f;
       }
       else if (abs(diff) < 1.f)
       {
         if (diff > 0)
-          ImGui::SetScrollY(currentScrollY + 1);
+          scrollY = currentScrollY + 1;
         else
-          ImGui::SetScrollY(currentScrollY - 1);
+          scrollY = currentScrollY - 1;
       }
       else
-        ImGui::SetScrollY(currentScrollY + diff);
+        scrollY = currentScrollY + diff;
     }
 
     ImGui::EndChild();
-    ImGui::TextWrapped("%s", currentTtsLine.c_str());
   }
 }
 
@@ -545,7 +576,6 @@ auto App::loadBook(const std::filesystem::path &v) -> void
   auto ss = std::ostringstream{};
   ss << f.rdbuf();
   bookContent = ss.str();
-  totalBookHeight = -1;
   isReading = false;
   readingPos = save.books[v.stem().stem()].readingPos;
   LOG("reading pos", readingPos);
