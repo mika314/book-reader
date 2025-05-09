@@ -241,12 +241,6 @@ static const char *ttsVoices[] = {"Female",
                                   "George (M)",
                                   "Lewis (M)"};
 
-struct Par
-{
-  std::string_view txt;
-  float h;
-};
-
 auto App::renderBook() -> void
 {
   if (selectedBook >= 0 && selectedBook < static_cast<int>(books.size()))
@@ -306,9 +300,11 @@ auto App::renderBook() -> void
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    auto pars = std::vector<Par>{};
+    const auto winW = ImGui::GetWindowWidth();
+    if (std::abs(winW - lastWinW) >= .5f || pars.empty())
     {
-      const auto winW = ImGui::GetWindowWidth();
+      lastWinW = winW;
+      pars.clear();
       for (auto b = 0U;;)
       {
         auto e = bookContent.find("\n\n", b);
@@ -584,6 +580,7 @@ auto App::loadBook(const std::filesystem::path &v) -> void
   save.selectedBook = v.stem().stem();
   isReading = false;
   needToUpdateScrollBar = true;
+  pars.clear();
 }
 
 auto updateUtf8Punctuation(std::string str) -> std::string

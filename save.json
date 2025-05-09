@@ -1846,13 +1846,13 @@
       "readingPos": 0
     },
     "Murakami, Haruki - 1Q84 (Knopf, 2011)": {
-      "readingPos": 180619
+      "readingPos": 319084
     },
     "Murakami, Haruki - A Wild Sheep Chase (Vintage, 2002)": {
       "readingPos": 0
     },
     "Murakami, Haruki - After Dark (Knopf, 2007)": {
-      "readingPos": 0
+      "readingPos": 168902
     },
     "Murakami, Haruki - After the Quake (Vintage, 2003)": {
       "readingPos": 0
@@ -4295,6 +4295,6 @@
     }
   },
   "selectedBook": "Murakami, Haruki - 1Q84 (Knopf, 2011)",
-  "readingSpeed": 1.4,
+  "readingSpeed": 1.2,
   "currentVoice": 0
 }

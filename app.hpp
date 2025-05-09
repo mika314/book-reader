@@ -44,6 +44,14 @@ private:
   std::string currentTtsLine;
   float scrollY = 0.0f;
 
+  struct Par
+  {
+    std::string_view txt;
+    float h;
+  };
+  std::vector<Par> pars;
+  float lastWinW = -1.f;
+
   auto getSpeedAdjustedSample() -> int16_t;
   auto getWavSample() -> int16_t;
   auto loadBook(const std::filesystem::path &) -> void;
