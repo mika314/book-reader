@@ -591,12 +591,12 @@ auto updateUtf8Punctuation(std::string str) -> std::string
   {
     if (ch == "“" || ch == "”")
       continue;
-    else if (ch == "’")
-      continue;
     else if (ch == "—")
       r += "--";
     else if (ch == "…")
       r += "...";
+    else if (ch == "’")
+      r += "'";
     else if (ch.empty())
       continue;
     else if (ch[0] == '\0')
