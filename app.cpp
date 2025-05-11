@@ -597,6 +597,8 @@ auto updateUtf8Punctuation(std::string str) -> std::string
       r += "...";
     else if (ch == "’")
       r += "'";
+    else if (ch == "é")
+      r += "e";
     else if (ch.empty())
       continue;
     else if (ch[0] == '\0')
